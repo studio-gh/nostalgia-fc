@@ -1,292 +1,373 @@
+// src/components/MatchEngine.js
 import React, { useState, useEffect, useRef } from 'react';
 
 /**
- * Componente: MatchEngine (Versão V12 Oficial)
- * Simulador minuto a minuto com suporte a Sinergias, Stamina, Setas de Moral ISS e UI Editorial Expandida.
+ * PARTE 4: MOTOR DE SIMULAÇÃO REALISTA (MATCH ENGINE V3.0)
+ * Transmissão Minuto a Minuto, Eventos Narrativos, Controle de Velocidade e Pênaltis Manuais.
  */
-export default function MatchEngine({
-  timeUtilizador,       // { nome: 'Meu Time', elenco: [...] } -> elenco com as props (moral, energia, etc.)
-  timeAdversario,       // { nome: 'AJAX 1995', elenco: [...] }
-  onFinalizarPartida,   // Retorna o resultado e as atualizações de moral/energia dos jogadores
-  velocidadeInicial = 2 // 1x, 2x, 3x
+export default function MatchEngine({ 
+    userTeamName, 
+    userTeamOVR, 
+    draftedTeam, 
+    opponent, 
+    onMatchFinished 
 }) {
-  const [minuto, setMinuto] = useState(0);
-  const [placarU, setPlacarU] = useState(0);
-  const [placarA, setPlacarA] = useState(0);
-  const [eventos, setEventos] = useState([]);
-  const [emAndamento, setEmAndamento] = useState(false);
-  const [velocidade, setVelocidade] = useState(velocidadeInicial);
-  const [mvpCandidatos, setMvpCandidatos] = useState({}); // Registar pontos para eleger o MVP
+    // Estados do Jogo Regulamentar
+    const [minute, setMinute] = useState(0);
+    const [scoreUser, setScoreUser] = useState(0);
+    const [scoreOpp, setScoreOpp] = useState(0);
+    const [gameLog, setGameLog] = useState([]);
+    const [momentum, setMomentum] = useState(50); // 0 (Adversário) a 100 (Usuário)
+    const [simSpeed, setSimSpeed] = useState(200); // 200ms = 2x, 500ms = 1x, 50ms = 5x
+    const [matchPhase, setMatchPhase] = useState('REGULAR'); // REGULAR, PENALTIES, FINISHED
+    const [activeEvents, setActiveEvents] = useState({ userGoals: [], oppGoals: [], cards: [], injuries: [] });
 
-  const intervalRef = useRef(null);
-  const cronicaEndRef = useRef(null);
+    // Estados da Disputa de Pênaltis Manuais
+    const [penRound, setPenRound] = useState(0);
+    const [penUserScore, setPenUserScore] = useState(0);
+    const [penOppScore, setPenOppScore] = useState(0);
+    const [penTurn, setPenTurn] = useState('USER_SHOOT'); // USER_SHOOT, USER_DEFEND
+    const [penHistory, setPenHistory] = useState([]); // { team: 'user'|'opp', hit: bool, round: int }
+    const [penMessage, setPenMessage] = useState('A partida terminou empatada! Prepare-se para a marca da cal.');
 
-  // Auto-scroll da caixa de narração expandida de 8-10 linhas
-  useEffect(() => {
-    if (cronicaEndRef.current) {
-      cronicaEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [eventos]);
+    const logEndRef = useRef(null);
+    const timerRef = useRef(null);
 
-  // Velocidades em milissegundos por minuto de simulação
-  const getTempoVelocidade = () => {
-    if (velocidade === 3) return 50;  // Ultra rápida
-    if (velocidade === 2) return 150; // Rápida equilibrada
-    return 400;                       // 1x (Transmissão Cadenciada)
-  };
-
-  // --- ENGINE CORE: CÁLCULO DE PODER COM SINERGIAS, MORAL E STAMINA ---
-  const calcularForcaEquipa = (elenco, isUtilizador = false) => {
-    let somaOvr = 0;
-    const titulares = elenco.filter(j => j.titular || isUtilizador); // se adversário não tiver flag, assume todos
-
-    // Se for o utilizador, extrair nomes para validar Sinergias de Duplas Dinâmicas
-    const nomesValidos = isUtilizador ? titulares.map(j => j.nome.toUpperCase()) : [];
-    const duplasTriggers = ['ROMÁRIO', 'BEBETO', 'RONALDO', 'RIVALDO', 'XAVI', 'INIESTA', 'MALDINI', 'NESTA'];
-
-    titulares.forEach(jogador => {
-      let ovrCalculado = jogador.ovr || 80;
-
-      // 1. Aplicação do Bónus da Seta de Moral (ISS)
-      if (jogador.moral === 'alta') ovrCalculado += 3;
-      if (jogador.moral === 'baixa') ovrCalculado -= 4;
-
-      // 2. Aplicação de Sinergia de Duplas Dinâmicas (+3 OVR)
-      if (isUtilizador) {
-        const temParceria = duplasTriggers.some(t => 
-          jogador.nome.toUpperCase().includes(t) && 
-          nomesValidos.some(n => n.includes(t) && n !== jogador.nome.toUpperCase())
-        );
-        if (temParceria) ovrCalculado += 3;
-      }
-
-      // 3. Penalização Crítica por Falta de Energia/Stamina
-      const energiaFator = (jogador.energia || 100) / 100;
-      if (energiaFator < 0.5) {
-        ovrCalculado *= 0.85; // Perda de 15% de rendimento se estiver exausto
-      } else if (energiaFator < 0.75) {
-        ovrCalculado *= 0.95;
-      }
-
-      somaOvr += ovrCalculado;
-    });
-
-    return somaOvr / (titulares.length || 1);
-  };
-
-  // Iniciar ou pausar a transmissão do jogo
-  const togglePartida = () => {
-    if (emAndamento) {
-      clearInterval(intervalRef.current);
-      setEmAndamento(false);
-    } else {
-      setEmAndamento(true);
-    }
-  };
-
-  // Loop de simulação minuto a minuto
-  useEffect(() => {
-    if (!emAndamento) return;
-
-    intervalRef.current = setInterval(() => {
-      setMinuto(prev => {
-        if (prev >= 90) {
-          clearInterval(intervalRef.current);
-          setEmAndamento(false);
-          finalizarJogo();
-          return 90;
+    // Auto-scroll do feed de crônicas de rádio
+    useEffect(() => {
+        if (logEndRef.current) {
+            logEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-        
-        const proximoMinuto = prev + 1;
-        processarMinuto(proximoMinuto);
-        return proximoMinuto;
-      });
-    }, getTempoVelocidade());
+    }, [gameLog]);
 
-    return () => clearInterval(intervalRef.current);
-  }, [emAndamento, velocidade, placarU, placarA, mvpCandidatos]);
-
-  // Processamento de probabilidades a cada minuto do cronómetro
-  const processarMinuto = (m) => {
-    const forcaU = calcularForcaEquipa(timeUtilizador.elenco, true);
-    const forcaA = calcularForcaEquipa(timeAdversario.elenco, false);
-
-    // Eventos aleatórios baseados no diferencial de forças dos esquadrões
-    const chanceAtaqueU = 0.04 + (forcaU - forcaA) * 0.003;
-    const chanceAtaqueA = 0.04 + (forcaA - forcaU) * 0.003;
-
-    const rand = Math.random();
-
-    if (rand < chanceAtaqueU) {
-      // Chance de golo do Utilizador
-      if (Math.random() > 0.45) {
-        const titularesU = timeUtilizador.elenco.filter(j => j.titular);
-        // Filtro de peso por posição para goleadores (ST/ATK com mais chances)
-        const goliador = titularesU[Math.floor(Math.random() * titularesU.length)];
-        
-        setPlacarU(p => p + 1);
-        setEventos(prev => [...prev, { min: m, tipo: 'GOLO', texto: `[GOLO] ${timeUtilizador.nome.toUpperCase()}! Balanço perfeito na área e ${goliador.nome.toUpperCase()} fuzila para as redes!` }]);
-        
-        // Registar pontos para MVP (Golo = 4pts)
-        setMvpCandidatos(prev => ({ ...prev, [goliador.id]: (prev[goliador.id] || 0) + 4 }));
-      } else {
-        setEventos(prev => [...prev, { min: m, tipo: 'LANCE', texto: `⚡ Oportunidade para o ${timeUtilizador.nome.toUpperCase()}, mas a defensiva adversária afasta o perigo.` }]);
-      }
-    } else if (rand < chanceAtaqueU + chanceAtaqueA) {
-      // Chance de golo do Adversário
-      if (Math.random() > 0.50) {
-        setPlacarA(p => p + 1);
-        setEventos(prev => [...prev, { min: m, tipo: 'GOLO', texto: `[GOLO] ${timeAdversario.nome.toUpperCase()}! Transição rápida apanha a nossa defesa descompensada e eles marcam.` }]);
-      } else {
-        setEventos(prev => [...prev, { min: m, tipo: 'LANCE', texto: `🛡️ Pressão do ${timeAdversario.nome.toUpperCase()}! Valeu o posicionamento tático para cortar o cruzamento.` }]);
-      }
-    }
-
-    // Evento raro: Cartão Amarelo aleatório para o utilizador (Disciplina)
-    if (Math.random() < 0.015) {
-      const titularesU = timeUtilizador.elenco.filter(j => j.titular);
-      const penalizado = titularesU[Math.floor(Math.random() * titularesU.length)];
-      setEventos(prev => [...prev, { min: m, tipo: 'CARTAO', texto: `[CARTÃO AMARELO] Entrada tardia de ${penalizado.nome.toUpperCase()} a travar o contra-ataque.` }]);
-      setMvpCandidatos(prev => ({ ...prev, [penalizado.id]: (prev[penalizado.id] || 0) - 2 })); // Perde pontos no MVP
-    }
-  };
-
-  // Processamento do Apito Final e Distribuição de Moral/Física V12
-  const finalizarJogo = () => {
-    const titularesU = timeUtilizador.elenco.filter(j => j.titular);
-    
-    // Eleger o MVP da partida com base nos pontos acumulados (ou maior rating se ninguém pontuou)
-    let mvpId = titularesU[0]?.id;
-    let maxPts = -999;
-    
-    titularesU.forEach(j => {
-      const pts = (mvpCandidatos[j.id] || 0) + (j.ovr * 0.05);
-      if (pts > maxPts) {
-        maxPts = pts;
-        mvpId = j.id;
-      }
-    });
-
-    const jogadorMvp = titularesU.find(j => j.id === mvpId);
-
-    // Gerar mapa de atualizações do elenco para a próxima jornada
-    const elencoAtualizado = timeUtilizador.elenco.map(j => {
-      let novaMoral = j.moral || 'normal';
-      let novaEnergia = j.energia || 100;
-
-      if (j.titular) {
-        // Redução normal de stamina por jogar os 90 minutos
-        novaEnergia = Math.max(15, novaEnergia - Math.floor(Math.random() * 12 + 18)); // Perde entre 18% e 30%
-        
-        // Se foi o MVP ou marcou golo (pontuou no sistema), ganha moral (Seta ⬆️)
-        if (j.id === mvpId || (mvpCandidatos[j.id] && mvpCandidatos[j.id] >= 4)) {
-          novaMoral = 'alta';
+    // Inicialização e Loop da Partida Minuto a Minuto
+    useEffect(() => {
+        if (matchPhase === 'REGULAR') {
+            timerRef.current = setInterval(() => {
+                setMinute(prev => {
+                    if (prev >= 90) {
+                        clearInterval(timerRef.current);
+                        handle90MinutesEnded();
+                        return 90;
+                    }
+                    const nextMin = prev + 1;
+                    runMinuteLogic(nextMin);
+                    return nextMin;
+                });
+            }, simSpeed);
         }
-      } else {
-        // Reservas descansam e recuperam energia no vestiário
-        novaEnergia = Math.min(100, novaEnergia + 25);
-      }
+        return () => clearInterval(timerRef.current);
+    }, [matchPhase, simSpeed, momentum, scoreUser, scoreOpp]);
 
-      return { ...j, moral: novaMoral, energia: novaEnergia };
-    });
+    // Efeito para ajustar velocidade dinamicamente no setInterval ativo
+    useEffect(() => {
+        if (matchPhase === 'REGULAR') {
+            clearInterval(timerRef.current);
+            timerRef.current = setInterval(() => {
+                setMinute(prev => {
+                    if (prev >= 90) {
+                        clearInterval(timerRef.current);
+                        handle90MinutesEnded();
+                        return 90;
+                    }
+                    const nextMin = prev + 1;
+                    runMinuteLogic(nextMin);
+                    return nextMin;
+                });
+            }, simSpeed);
+        }
+        return () => clearInterval(timerRef.current);
+    }, [simSpeed]);
 
-    setEventos(prev => [...prev, { min: 90, tipo: 'FIM', texto: `[APITO FINAL] Fim dos 90 minutos regulamentares de futebol analógico. MVP Nomeado: ${jogadorMvp?.nome?.toUpperCase() || 'NENHUM'}.` }]);
+    // Sintetizador Físico de Áudio Retrô (Sem arquivos externos para garantir performance)
+    const playBeep = (freq, duration) => {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + duration);
+        } catch (e) { console.log(e); }
+    };
 
-    // Callback para o componente pai salvar a memória da campanha
-    if (onFinalizarPartida) {
-      setTimeout(() => {
-        onFinalizarPartida({
-          placarU,
-          placarA,
-          mvp: jogadorMvp,
-          elencoAtualizado
-        });
-      }, 2500);
-    }
-  };
+    // Lógica Central de Eventos a cada Minuto
+    const runMinuteLogic = (currentMin) => {
+        // Cálculo de probabilidade ponderado por OVR e Momentum de jogo
+        const ovrDiff = userTeamOVR - (opponent.ovr || 85);
+        const userChanceBase = 0.05 + (ovrDiff * 0.002) + ((momentum - 50) * 0.001);
+        const oppChanceBase = 0.05 - (ovrDiff * 0.002) - ((momentum - 50) * 0.001);
 
-  return (
-    <div className="w-full max-w-[1200px] mx-auto p-4 font-sans text-[#1A1A1A]">
-      
-      {/* GRID DO MODO REVISTA EDITORIAL DA V12: 3 COLUNAS EM DESKTOP */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
-        {/* COLUNA ESQUERDA: PLACAR FIXO DE TV RETRÔ E CONTROLES */}
-        <div className="bg-white border-4 border-[#1A1A1A] p-4 shadow-[4px_4px_0px_0px_#1A1A1A] flex flex-col gap-4">
-          <span className="font-mono text-[10px] tracking-widest uppercase font-bold text-red-600">Transmissão Ao Vivo</span>
-          
-          {/* Painel do Placar Compactado para evitar Scroll */}
-          <div className="bg-[#1A1A1A] text-[#F4F1EA] p-3 text-center font-mono border-2 border-black">
-            <div className="text-[11px] text-zinc-400 uppercase font-bold tracking-tight">Copa Nostalgia</div>
-            <div className="flex justify-between items-center mt-2 px-2">
-              <span className="text-sm font-black truncate max-w-[80px]">{timeUtilizador.nome.replace(/\s\d{4}$/, '')}</span>
-              <span className="text-2xl font-black bg-zinc-800 px-3 py-0.5 text-amber-400 shadow-inner">{placarU}</span>
-              <span className="text-xs text-zinc-500 font-bold mx-1">X</span>
-              <span className="text-2xl font-black bg-zinc-800 px-3 py-0.5 text-amber-400 shadow-inner">{placarA}</span>
-              <span className="text-sm font-black truncate max-w-[80px]">{timeAdversario.nome.replace(/\s\d{4}$/, '')}</span>
-            </div>
-            <div className="text-xl font-black tracking-tighter text-red-500 mt-2 border-t border-zinc-800 pt-1">
-              {minuto}' MIN
-            </div>
-          </div>
+        // Flutuação aleatória controlada do Momentum da partida
+        let momentumDelta = (Math.random() - 0.5) * 6;
+        if (Math.random() < 0.1) momentumDelta += ovrDiff > 0 ? 8 : -8; // Peso da Camisa
+        setMomentum(prev => Math.max(10, Math.min(90, Math.round(prev + momentumDelta))));
 
-          {/* Seletores de Velocidade e Simulação */}
-          <div className="flex flex-col gap-2">
-            <button 
-              onClick={togglePartida}
-              className={`w-full font-mono font-black uppercase text-xs p-2.5 border-2 border-black shadow-[2px_2px_0px_0px_#000] transition-all active:translate-y-0.5 ${
-                emAndamento ? 'bg-amber-500 text-black' : 'bg-green-700 text-white hover:bg-green-600'
-              }`}
-            >
-              {minuto === 90 ? 'Partida Encerrada' : emAndamento ? 'Pausar Simulação' : 'Apitar / Iniciar Jogo'}
-            </button>
+        const randEvent = Math.random();
 
-            <div className="grid grid-cols-3 gap-1 border-t border-zinc-200 pt-2">
-              {[1, 2, 3].map(v => (
-                <button
-                  key={v}
-                  onClick={() => setVelocidade(v)}
-                  className={`font-mono font-bold text-[10px] uppercase p-1.5 border border-black ${
-                    velocidade === v ? 'bg-[#1A1A1A] text-[#F4F1EA]' : 'bg-stone-100 text-zinc-600 hover:bg-zinc-200'
-                  }`}
-                >
-                  {v === 3 ? 'Turbo' : `${v}x`}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        // 1. CHANCE DE GOL DO USUÁRIO
+        if (randEvent < userChanceBase) {
+            // Sorteia o jogador que participou da jogada baseado no peso clássico por posição
+            const scorersPool = [];
+            draftedTeam.forEach(p => {
+                if (!p) return;
+                let weight = 1;
+                if (p.pos === 'ST' || p.pos === 'CF') weight = 40;
+                if (p.pos === 'WINGER' || p.pos === 'CAM') weight = 20;
+                if (p.pos === 'MID' || p.pos === 'CM') weight = 8;
+                if (p.pos === 'DEF' || p.pos === 'CB') weight = 2;
+                if (p.pos === 'GK') weight = 0.1; // Goleiro raríssimo fazer gol
+                for (let i = 0; i < weight * 10; i++) scorersPool.push(p.name);
+            });
+            const scorerName = scorersPool.length > 0 ? scorersPool[Math.floor(Math.random() * scorersPool.length)] : 'Craque Retrô';
 
-        {/* COLUNA CENTRAL: ÁREA DE NARRAÇÃO EXPANDIDA (8 A 10 EVENTOS SIMULTÂNEOS) */}
-        <div className="lg:col-span-2 flex flex-col bg-[#F4F1EA] border-4 border-[#1A1A1A] p-4 shadow-[4px_4px_0px_0px_#1A1A1A]">
-          <h2 className="font-serif font-black text-lg uppercase tracking-tight text-[#1A1A1A] border-b-2 border-black pb-1 mb-3">
-            Crónica da Partida Minuto a Minuto
-          </h2>
-          
-          {/* Caixa Otimizada com Altura Fixa Confortável */}
-          <div className="w-full h-72 overflow-y-auto pr-1 flex flex-col gap-2 font-mono text-xs leading-relaxed text-[#1A1A1A]">
-            {eventos.length === 0 ? (
-              <p className="font-serif italic text-zinc-400 p-2">Equipas perfiladas no túnel de acesso. Aguarda o apito inicial do árbitro...</p>
-            ) : (
-              eventos.map((e, index) => (
-                <div 
-                  key={index} 
-                  className={`p-2 border border-zinc-300 shadow-[1px_1px_0px_rgba(0,0,0,0.05)] transition-all ${
-                    e.tipo === 'GOLO' ? 'bg-amber-400 font-bold border-amber-600 animate-pulse text-amber-950' :
-                    e.tipo === 'CARTAO' ? 'bg-amber-100 border-amber-400 text-amber-900' :
-                    e.tipo === 'FIM' ? 'bg-zinc-800 text-stone-100 border-black' : 'bg-white'
-                  }`}
-                >
-                  <span className="text-red-700 font-black mr-2">[{e.min}']</span>
-                  {e.texto}
+            setScoreUser(s => s + 1);
+            setActiveEvents(prev => ({ ...prev, userGoals: [...prev.userGoals, { name: scorerName, min: currentMin }] }));
+            setGameLog(prev => [...prev, `[${currentMin}'] ⚽ GOOOOOOL DO ${userTeamName}! Sensacional batida de ${scorerName}! O placar se altera.`]);
+            setMomentum(85); // Empurra a barra pra frente
+            playBeep(880, 0.4); // Apito do gol
+        } 
+        // 2. CHANCE DE GOL DO ADVERSÁRIO
+        else if (randEvent > 1 - oppChanceBase) {
+            setScoreOpp(s => s + 1);
+            const oppPlayers = ['Artilheiro Matador', 'Camisa 10 Lenda', 'Meia Motorzinho', 'Zagueiro Grandão'];
+            const oppScorer = oppPlayers[Math.floor(Math.random() * oppPlayers.length)];
+            
+            setActiveEvents(prev => ({ ...prev, oppGoals: [...prev.oppGoals, { name: oppScorer, min: currentMin }] }));
+            setGameLog(prev => [...prev, `[${currentMin}'] ⚽ GOL DO ${opponent.name}! Em jogada rápida, ${oppScorer} empata ou amplia o placar.`]);
+            setMomentum(15);
+            playBeep(440, 0.4);
+        }
+        // 3. COMENTÁRIO NARRATIVO RELEVANTE DE RÁDIO
+        else if (Math.random() < 0.22) {
+            const narrations = [
+                `A torcida canta alto na arquibancada, clima de fita VHS acesa!`,
+                `Jogo pego no meio campo, faltas duras e muita catimba retrô.`,
+                `Subida perigosa pela lateral, cruzamento na área mas o goleiro afasta com estilo!`,
+                `O técnico grita da beira do gramado pedindo atenção na marcação sob pressão.`,
+                `Que drible espetacular no meio campo! Levantou o estádio de vez.`,
+                `Cartão amarelo mostrado pelo árbitro após entrada dura por trás!`
+            ];
+            setGameLog(prev => [...prev, `[${currentMin}'] 📻 ${narrations[Math.floor(Math.random() * narrations.length)]}`]);
+            if (Math.random() < 0.05) playBeep(600, 0.08); // Som sutil de torcida/clique
+        }
+    };
+
+    const handle90MinutesEnded = () => {
+        playBeep(523.25, 0.2); setTimeout(() => playBeep(523.25, 0.4), 250); // Apito final duplo
+        if (scoreUser === scoreOpp) {
+            setMatchPhase('PENALTIES');
+            setGameLog(prev => [...prev, `🏁 [90'] FIM DE PAPO! Jogo duríssimo termina em ${scoreUser}x${scoreOpp}. Vamos para as penalidades máximas!`]);
+        } else {
+            setMatchPhase('FINISHED');
+        }
+    };
+
+    // Lógica da Disputa de Pênaltis Manuais
+    const handlePenaltyChoice = (direction) => {
+        const oppDirections = ['ESQUERDA', 'CENTRO', 'DIREITA'];
+        const oppChoice = oppDirections[Math.floor(Math.random() * oppDirections.length)];
+        const isHit = direction !== oppChoice; // Se escolher canto oposto do goleiro/batedor adversário, dá bom
+
+        if (penTurn === 'USER_SHOOT') {
+            if (isHit) {
+                setPenUserScore(s => s + 1);
+                setPenHistory(prev => [...prev, { team: 'user', hit: true, round: penRound }]);
+                setPenMessage(`✅ Você chutou na ${direction} e o goleiro voou para a ${oppChoice}! GOL DO ${userTeamName}!`);
+                playBeep(784, 0.15);
+            } else {
+                setPenHistory(prev => [...prev, { team: 'user', hit: false, round: penRound }]);
+                setPenMessage(`❌ Defendeu! Você bateu na ${direction} e o goleiro buscou firme no mesmo canto!`);
+                playBeep(330, 0.2);
+            }
+            setPenTurn('USER_DEFEND');
+        } else {
+            if (!isHit) { // Usuário acertou o canto do chute adversário -> DEFENDEU
+                setPenHistory(prev => [...prev, { team: 'opp', hit: false, round: penRound }]);
+                setPenMessage(`🧤 SENSACIONAL! Você pulou na ${direction} e buscou o chute cobrado na ${oppChoice}! DEFESA HISTÓRICA!`);
+                playBeep(880, 0.25);
+            } else {
+                setPenOppScore(s => s + 1);
+                setPenHistory(prev => [...prev, { team: 'opp', hit: true, round: penRound }]);
+                setPenMessage(`⚽ Gol deles. Você saltou para a ${direction}, mas o atacante cobrou com frieza na ${oppChoice}.`);
+                playBeep(440, 0.15);
+            }
+            
+            // Validação de Morte Súbita ou Fim de Rodada (Padrão FIFA de Penalidades)
+            const nextRound = penRound + 1;
+            const userRemaining = Math.max(0, 5 - nextRound);
+            const oppRemaining = Math.max(0, 5 - nextRound);
+
+            // Regra matemática de encerramento antes das 5 cobranças
+            if (penUserScore > penOppScore + oppRemaining || penOppScore > penUserScore + userRemaining) {
+                endPenalties();
+            } else if (nextRound >= 5 && penUserScore !== penOppScore) {
+                endPenalties();
+            } else {
+                setPenRound(nextRound);
+                setPenTurn('USER_SHOOT');
+            }
+        }
+    };
+
+    const endPenalties = () => {
+        setMatchPhase('FINISHED');
+        setGameLog(prev => [...prev, `🏆 FIM DA DISPUTA DE PÊNALTIS! Placar final das penalidades: ${penUserScore} a ${penOppScore}.`]);
+    };
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            
+            {/* PLACAR ELETRÔNICO RETRÔ */}
+            <div className="md:col-span-12 border-4 border-obsidian p-4 bg-stone-900 text-white shadow-[4px_4px_0px_#1A1A1A] flex flex-col items-center justify-center relative rounded-md overflow-hidden">
+                <div className="absolute top-2 left-4 font-mono text-[9px] tracking-widest text-retroGold uppercase">📺 Transmissão ao Vivo</div>
+                
+                <div className="flex items-center gap-6 md:gap-12 my-3 w-full justify-center px-4">
+                    <div className="text-right flex-1">
+                        <h2 className="font-anton text-2xl md:text-4xl uppercase tracking-wide leading-none text-white">{userTeamName}</h2>
+                        <span className="font-mono text-[9px] text-stone-400">OVR {userTeamOVR}</span>
+                    </div>
+                    
+                    <div className="bg-black border-2 border-retroGold px-4 py-2 font-mono text-center min-w-[100px] shadow-[0_0_10px_rgba(212,175,55,0.2)]">
+                        <div className="text-[10px] text-retroGold tracking-widest uppercase font-bold">⏱️ MINUTO</div>
+                        <div className="font-anton text-3xl text-white leading-none">{minute}'</div>
+                    </div>
+
+                    <div className="text-left flex-1">
+                        <h2 className="font-anton text-2xl md:text-4xl uppercase tracking-wide leading-none text-retroGold">{opponent.name}</h2>
+                        <span className="font-mono text-[9px] text-stone-400">OVR {opponent.ovr || 85}</span>
+                    </div>
                 </div>
-              ))
-            )}
-            <div ref={cronicaEndRef} />
-          </div>
-        </div>
 
-      </div>
-    </div>
-  );
+                <div className="font-anton text-5xl md:text-6xl bg-black px-8 py-2 border border-stone-700 tracking-wider font-black text-center text-green-400 rounded shadow-inner">
+                    {scoreUser} <span className="text-stone-500 text-3xl font-sans mx-2">x</span> {scoreOpp}
+                </div>
+            </div>
+
+            {/* CONTROLES DE VELOCIDADE E BARRA DE MOMENTUM */}
+            <div className="md:col-span-12 border-2 border-obsidian p-3 bg-white flex flex-col md:flex-row justify-between items-center gap-4 shadow-[2px_2px_0px_#000]">
+                <div className="w-full md:w-1/2 flex flex-col gap-1">
+                    <div className="flex justify-between font-mono text-[10px] font-bold text-obsidian uppercase">
+                        <span>📉 Pressão Adversária</span>
+                        <span>📈 Seu Momentum ({momentum}%)</span>
+                    </div>
+                    <div className="w-full bg-stone-200 border border-obsidian h-4 relative overflow-hidden rounded-xs">
+                        <div 
+                            style={{ width: `${momentum}%` }}
+                            className="bg-gradient-to-r from-amber-500 to-retroGold h-full transition-all duration-300 border-r-2 border-obsidian"
+                        ></div>
+                    </div>
+                </div>
+
+                {matchPhase === 'REGULAR' && (
+                    <div className="flex items-center gap-1 bg-stone-100 p-1 border border-obsidian">
+                        <span className="font-mono text-[9px] uppercase font-bold px-2 text-stone-500">Velocidade:</span>
+                        <button onClick={() => setSimSpeed(500)} className={`p-1 px-3 border font-mono text-xs font-bold uppercase ${simSpeed === 500 ? 'bg-obsidian text-white' : 'bg-white hover:bg-stone-50'}`}>1x</button>
+                        <button onClick={() => setSimSpeed(200)} className={`p-1 px-3 border font-mono text-xs font-bold uppercase ${simSpeed === 200 ? 'bg-obsidian text-white' : 'bg-white hover:bg-stone-50'}`}>2x</button>
+                        <button onClick={() => setSimSpeed(50)} className={`p-1 px-3 border font-mono text-xs font-bold uppercase ${simSpeed === 50 ? 'bg-retroRed text-white border-retroRed' : 'bg-white hover:bg-stone-50'}`}>🔥 Turbo</button>
+                    </div>
+                )}
+            </div>
+
+            {/* CRÔNICA DO RÁDIO E FEED MINUTO A MINUTO */}
+            <div className="md:col-span-7 border-4 border-obsidian p-4 bg-creme shadow-[4px_4px_0px_#1A1A1A] flex flex-col h-[320px]">
+                <h3 className="font-anton text-lg uppercase border-b-2 border-obsidian pb-1 mb-2 tracking-wide text-obsidian">📻 RELATO DOS ALTO-FALANTES</h3>
+                <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1.5 font-mono text-xs">
+                    {gameLog.map((log, i) => (
+                        <p key={i} className={`p-1 border-b border-stone-300/60 leading-relaxed ${log.includes('⚽') ? 'bg-green-100 border-l-4 border-l-green-600 font-bold px-2' : ''}`}>
+                            {log}
+                        </p>
+                    ))}
+                    <div ref={logEndRef} />
+                </div>
+            </div>
+
+            {/* PAINEL DE ARTILHARIA E RESUMO DA TRANSMISSÃO */}
+            <div className="md:col-span-5 border-4 border-obsidian p-4 bg-white shadow-[4px_4px_0px_#1A1A1A] flex flex-col justify-between h-[320px]">
+                <div>
+                    <h3 className="font-anton text-lg uppercase border-b-2 border-obsidian pb-1 mb-3 text-obsidian">📋 EVENTOS DA PARTIDA</h3>
+                    <div className="grid grid-cols-2 gap-4 font-mono text-xs overflow-y-auto max-h-[180px]">
+                        <div>
+                            <p className="font-bold border-b border-obsidian text-[10px] uppercase text-stone-500 mb-1">⚽ {userTeamName}</p>
+                            {activeEvents.userGoals.map((g, i) => (
+                                <div key={i} className="mb-0.5">⏱️ {g.min}' - <span className="font-bold text-obsidian">{g.name.split(' ')[0]}</span></div>
+                            ))}
+                        </div>
+                        <div>
+                            <p className="font-bold border-b border-obsidian text-[10px] uppercase text-stone-500 mb-1">⚽ {opponent.name}</p>
+                            {activeEvents.oppGoals.map((g, i) => (
+                                <div key={i} className="mb-0.5">⏱️ {g.min}' - <span className="font-bold text-retroRed">{g.name.split(' ')[0]}</span></div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {matchPhase === 'FINISHED' && (
+                    <button 
+                        onClick={() => onMatchFinished({ scoreUser, scoreOpp, activeEvents, penUserScore, penOppScore })}
+                        className="w-full bg-retroGold text-black font-anton text-lg uppercase py-3 border-2 border-black shadow-[3px_3px_0px_#000] hover:bg-amber-400 active:translate-y-0.5 transition-all mt-2"
+                    >
+                        🏆 Sair de Campo e Avançar
+                    </button>
+                )}
+            </div>
+
+            {/* MÓDULO INTERATIVO DE PÊNALTIS SE HOUVER EMPATE */}
+            {matchPhase === 'PENALTIES' && (
+                <div className="md:col-span-12 border-4 border-dashed border-retroRed p-4 bg-[#FFF5F5] shadow-[6px_6px_0px_#1A1A1A] text-center mt-2 animate-fadeIn">
+                    <h3 className="font-anton text-2xl text-retroRed uppercase tracking-widest mb-1">🧤 DISPUTA DE PÊNALTIS MANUAL</h3>
+                    <p className="font-serif italic text-xs text-stone-600 mb-4">{penMessage}</p>
+
+                    {/* Histórico das Cobranças Atuais */}
+                    <div className="flex justify-center items-center gap-4 mb-6 font-mono text-xs">
+                        <div className="bg-white border border-obsidian p-2 rounded shadow-sm">
+                            <span className="font-bold block text-[10px] uppercase text-stone-500">{userTeamName}</span>
+                            <span className="font-anton text-xl text-black">{penUserScore}</span>
+                        </div>
+                        <div className="font-anton text-xl text-stone-400">vs</div>
+                        <div className="bg-white border border-obsidian p-2 rounded shadow-sm">
+                            <span className="font-bold block text-[10px] uppercase text-stone-500">{opponent.name}</span>
+                            <span className="font-anton text-xl text-retroRed">{penOppScore}</span>
+                        </div>
+                    </div>
+
+                    {/* Interface de Tomada de Decisão */}
+                    <div className="border-4 border-obsidian bg-pitchGreen p-6 max-w-md mx-auto rounded shadow-inner relative overflow-hidden">
+                        <div className="absolute top-2 left-1/2 -translate-x-1/2 font-mono text-[9px] uppercase text-white/60 font-bold tracking-widest">
+                            {penTurn === 'USER_SHOOT' ? '⚽ SEU CHUTE: Escolha o Canto' : '🧤 SUA DEFESA: Escolha o Voo'}
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-3 mt-4">
+                            <button 
+                                onClick={() => handlePenaltyChoice('ESQUERDA')}
+                                className="bg-creme hover:bg-stone-100 font-anton text-sm uppercase p-3 border-2 border-black shadow-[2px_2px_0px_#000] active:translate-y-0.5 transition-all"
+                            >
+                                ↖️ Esquerda
+                            </button>
+                            <button 
+                                onClick={() => handlePenaltyChoice('CENTRO')}
+                                className="bg-creme hover:bg-stone-100 font-anton text-sm uppercase p-3 border-2 border-black shadow-[2px_2px_0px_#000] active:translate-y-0.5 transition-all"
+                            >
+                                ⬆️ Centro
+                            </button>
+                            <button 
+                                onClick={() => handlePenaltyChoice('DIREITA')}
+                                className="bg-creme hover:bg-stone-100 font-anton text-sm uppercase p-3 border-2 border-black shadow-[2px_2px_0px_#000] active:translate-y-0.5 transition-all"
+                            >
+                                ↗️ Direita
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+        </div>
+    );
 }

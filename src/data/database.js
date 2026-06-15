@@ -1,4 +1,7 @@
-/**
+// src/data/database.js
+
+export const CLUBES = [
+  // /**
  * NOSTALGIA FC - BANCO DE DADOS OFICIAL DE JOGADORES, TIMES E SINERGIAS (V12)
  * * Escala de Ratings Desinflacionada:
  * - Tier GOAT: 95 - 99 (Gênios absolutos e lendas intocáveis)
@@ -962,3 +965,8 @@ export const RETRO_STICKERS = [
   { id: "stk_jardel", name: "Mário Jardel (1999)", rarity: "Lendário", desc: "Máquina implacável de cabecear do Porto." },
   { id: "stk_juninho", name: "Juninho Pernambucano (2005)", rarity: "Lendário", desc: "Trajetória perfeita na bola parada com o Lyon." }
 ];
+// Mantenha esta função ao final do arquivo, ela é vital para o MatchEngine funcionar:
+export const getElencoPorClube = (clubeId) => {
+  const clube = HISTORIC_CLUBS.find(c => c.id === clubeId);
+  return clube ? clube.lineup.players : [];
+};
