@@ -1,7 +1,6 @@
 // src/data/database.js
 
-export const CLUBES = [
-  // /**
+/**
  * NOSTALGIA FC - BANCO DE DADOS OFICIAL DE JOGADORES, TIMES E SINERGIAS (V12)
  * * Escala de Ratings Desinflacionada:
  * - Tier GOAT: 95 - 99 (Gênios absolutos e lendas intocáveis)
@@ -11,6 +10,7 @@ export const CLUBES = [
  * - Tier Bom: 79 - 82 (Operários táticos e jogadores de elenco clássico)
  */
 
+export const CLUBES = [
 // Sinergias históricas (Duplas e Trios Dinâmicos que ativam bônus de +3 OVR)
 export const DYNAMIC_DUOS = [
   // Duplas brasileiras clássicas
