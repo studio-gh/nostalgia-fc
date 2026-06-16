@@ -11,6 +11,7 @@
  */
 
 export const CLUBES = [
+  ];
 // Sinergias históricas (Duplas e Trios Dinâmicos que ativam bônus de +3 OVR)
 export const DYNAMIC_DUOS = [
   // Duplas brasileiras clássicas
