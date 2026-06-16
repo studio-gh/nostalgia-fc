@@ -1,27 +1,8 @@
-<script type="text/babel">
-    // 1. Extraia os componentes do objeto window para variáveis locais
-    // Isso é obrigatório porque o JSX precisa que o nome do componente 
-    // comece com letra maiúscula e esteja acessível no escopo.
-    const MatchEngine = window.MatchEngine;
-    const DraftScreen = window.DraftScreen;
-    const VestiarioScreen = window.VestiarioScreen;
-
-    function NostalgiaFCApp() {
-        // ... estados globais ...
-
-        return (
-            <div className="min-h-screen bg-creme font-sans text-obsidian p-4">
-                {/* Agora o JSX reconhece a constante MatchEngine local */}
-                {currentScreen === SCREENS.SIMULADOR && (
-                    <MatchEngine 
-                        userTeamName={userTeamName}
-                        userTeamOVR={calculateTeamOVR()}
-                        draftedTeam={draftedTeam}
-                        opponent={isKnockout ? getCurrentKnockoutOpponent() : campaignMatches[currentMatchIndex]}
-                        onMatchFinished={handleMatchFinishedCallback}
-                    />
-                )}
-            </div>
-        );
-    }
+<!-- index.html -->
+<script type="module">
+  // 1. Importa a constante do banco de dados que está na pasta do GitHub
+  import { CLUBES } from './src/data/database.js';
+  
+  // 2. Disponibiliza globalmente para que o restante do app possa ler
+  window.CLUBES = CLUBES;
 </script>
