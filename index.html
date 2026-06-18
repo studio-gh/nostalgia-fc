@@ -11,40 +11,145 @@
     <script src="jogadores.js"></script>
     <script src="motor.js"></script>
     <style>
-        body { background: #0A0A0A; color: #FFF; font-family: system-ui, sans-serif; user-select: none; }
-        .campo-gramado { background: linear-gradient(to bottom, #15803d 50%, #166534 50%); background-size: 100% 40px; border: 4px solid #FFF; position: relative; }
-        .linha-meio { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: rgba(255,255,255,0.6); }
-        .circulo-central { position: absolute; top: 50%; left: 50%; width: 70px; height: 70px; border: 2px solid rgba(255,255,255,0.6); border-radius: 50%; transform: translate(-50%, -50%); }
-    </style>
+    /* Global & Field */
+    body { background: #0A0A0A; color: #FFF; font-family: system-ui, sans-serif; user-select: none; }
+    .campo-gramado { background: linear-gradient(to bottom, #15803d 50%, #166534 50%); background-size: 100% 40px; border: 4px solid #FFF; position: relative; }
+    .linha-meio { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: rgba(255,255,255,0.6); }
+    .circulo-central { position: absolute; top: 50%; left: 50%; width: 70px; height: 70px; border: 2px solid rgba(255,255,255,0.6); border-radius: 50%; transform: translate(-50%, -50%); }
+
+    /* Container de Seleção */
+    .botoes-liga-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin: 35px auto;
+        max-width: 320px;
+        padding: 0 15px;
+    }
+
+    /* Base de Design de Botão 16-Bit / Pixel Art */
+    .btn-retro {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 1.15rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 18px 20px;
+        border: 4px solid #000000;
+        border-radius: 0px;
+        box-shadow: 6px 6px 0px #000000;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.05s ease;
+    }
+
+    /* Efeito de Clique Físico */
+    .btn-retro:active {
+        transform: translate(4px, 4px);
+        box-shadow: 2px 2px 0px #000000;
+    }
+
+    /* 🇮🇹 Itália: Azul e Branco */
+    .btn-italia {
+        background-color: #004BB4;
+        color: #FFFFFF;
+        text-shadow: 2px 2px 0px #000000;
+    }
+
+    .btn-italia:hover { background-color: #005ce6; }
+
+    /* 🇪🇸 Espanha: Vermelho e Amarelo */
+    .btn-espanha {
+        background-color: #C60B1E;
+        color: #F1BF00;
+        text-shadow: 2px 2px 0px #000000;
+    }
+
+    .btn-espanha:hover { background-color: #e60e24; }
+
+    /* Título */
+    .titulo-retro {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #f1bf00;
+        text-shadow: 4px 4px 0px #000;
+        margin-bottom: 5px;
+        text-align: center;
+    }
+</style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        function App() {
-            // === ESTADOS CORE ===
-            const [fase, setFase] = React.useState('MENU_LIGA'); 
-            const [ligaSelecionada, setLigaSelecionada] = React.useState('Série A');
-            const [meuTimeTitular, setMeuTimeTitular] = React.useState(Array(11).fill(null));
-            const [meuTimeReserva, setMeuTimeReserva] = React.useState(Array(5).fill(null));
-            const [orcamento, setOrcamento] = React.useState(750);
-            const [slotSelecionado, setSlotSelecionado] = React.useState(null);
-            const [opcoesDraft, setOpcoesDraft] = React.useState([]);
-            const [timeAdversario, setTimeAdversario] = React.useState(null);
-            
-            // === ESTADOS MOTOR DA PARTIDA ===
-            const [partida, setPartida] = React.useState({
-                minuto: 0, placarSeu: 0, placarAdv: 0, emAndamento: false, historico: []
-            });
-            const [narracao, setNarracao] = React.useState('Preparando os vestiários...');
-            const [gritoTecnico, setGritoTecnico] = React.useState('EQUILIBRADO');
+function App() {
+  // Estados do Fluxo de Telas
+  const [faseJogo, setFaseJogo] = React.useState('SELECAO_LIGA'); // Inicializa na seleção de liga
+  const [ligaSelecionada, setLigaSelecionada] = React.useState(''); // 'Série A' ou 'La Liga'
+  
+  // Estados do Time do Usuário
+  const [titulares, setTitulares] = React.useState([]);
+  const [reservas, setReservas] = React.useState([]);
+  
+  // Estado do processo de Draft atual
+  const [posicaoAtualDraft, setPosicaoAtualDraft] = React.useState(0); // Ex: 0 = Goleiro, 1 = Lateral...
+  const [opcoesDraft, setOpcoesDraft] = React.useState([]);
 
-            // === DEFINIÇÃO DE POSIÇÕES PADRÃO (4-3-3) ===
-            const posicoesSlots = [
-                'GOL', 'ZAG', 'ZAG', 'ZAG', 'ZAG',
-                'MEI', 'MEI', 'MEI',
-                'ATA', 'ATA', 'ATA'
-            ];
+  // Ordem sequencial do Draft clássico por posições
+  const posicoesOrdem = ['GOL', 'ZAG', 'ZAG', 'LAT_ESQ', 'LAT_DIR', 'VOL', 'MEI', 'MEI', 'ATA', 'ATA', 'ATA', 'RES', 'RES', 'RES', 'RES', 'RES'];
+
+  // Função para rolar o dado injetando o filtro de liga
+  const rolarDadoDraft = () => {
+    const posicaoBuscada = posicoesOrdem[posicaoAtualDraft];
+    
+    // -> O PULO DO GATO: Filtrando a base do jogadores.js pela liga e posição atual
+    const candidatos = listaJogadoresGlobal.filter(jog => 
+      jog.liga === ligaSelecionada && 
+      (posicaoBuscada === 'RES' ? true : jog.posicao === posicaoBuscada)
+    );
+
+    // Seleciona 3 opções aleatórias (estilo Draft clássico) para o usuário escolher uma
+    const embaralhado = [...candidatos].sort(() => 0.5 - Math.random());
+    const selecionados = embaralhado.slice(0, 3);
+    
+    setOpcoesDraft(selecionados);
+    
+    // Estados de controle financeiro
+const [orcamento, setOrcamento] = React.useState(100000); // Exemplo: 100k de Salary Cap inicial
+
+const escolherJogador = (jogadorSelecionado) => {
+  // 1. VERIFICAÇÃO DA TRAVA: O orçamento é suficiente?
+  if (jogadorSelecionado.custo > orcamento) {
+    alert(`🚨 FINANÇAS EM CRISE!\nO custo de ${jogadorSelecionado.nome} (${jogadorSelecionado.custo}) ultrapassa o seu saldo restante (${orcamento}). Escolha outro!`);
+    return; // Bloqueia a execução e não avança o Draft
+  }
+
+  // 2. SE PASSOU NA TRAVA: Deduz o valor e adiciona ao elenco
+  setOrcamento(prev => prev - jogadorSelecionado.custo);
+
+  const posicaoBuscada = posicoesOrdem[posicaoAtualDraft];
+
+  if (posicaoBuscada === 'RES') {
+    setReservas(prev => [...prev, { ...jogadorSelecionado, stamina: 100, moral: jogadorSelecionado.moral || 'NORMAL' }]);
+  } else {
+    setTitulares(prev => [...prev, { ...jogadorSelecionado, stamina: 100, moral: jogadorSelecionado.moral || 'NORMAL' }]);
+  }
+
+  // Clear nas opções atuais para forçar o próximo giro de dados
+  setOpcoesDraft([]);
+
+  // 3. FLUXO DE AVANÇO OU FINALIZAÇÃO DO DRAFT
+  if (posicaoAtualDraft + 1 < posicoesOrdem.length) {
+    setPosicaoAtualDraft(prev => prev + 1);
+  } else {
+    // Fim do Draft! Avança para o Menu Principal onde a Copa será montada
+    setFaseJogo('MENU_PRINCIPAL');
+  }
+};
+  };
+
+  // ... (resto das funções de escolha do jogador e avanço de posição)
 
             // === REGRA DE OURO: ROLAGEM DO DADO POR POSIÇÃO SEM REPETIÇÃO DE NOME ===
             const rolarDadoPorPosicao = (posicaoAtual) => {
@@ -169,130 +274,83 @@
             }, [partida.emAndamento, partida.minuto]);
 
             return (
-                <div className="max-w-md mx-auto bg-neutral-900 min-h-screen flex flex-col p-4 border-x border-neutral-800 shadow-2xl">
-                    
-                    {/* TELA 1: MENU DE LIGAS */}
-                    {fase === 'MENU_LIGA' && (
-                        <div className="flex flex-col items-center justify-center flex-1 text-center space-y-6">
-                            <h1 className="text-3xl font-black tracking-tighter text-amber-500 uppercase">NOSTALGIA FC</h1>
-                            <p className="text-sm text-zinc-400 font-medium px-4">Escolha o campeonato clássico para iniciar o seu Draft de lendas:</p>
-                            
-                            <div className="w-full space-y-3 px-4">
-                                <button onClick={() => { setLigaSelecionada('Série A'); setFase('DRAFT'); }} className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-zinc-700 font-bold text-lg flex items-center justify-center gap-2 transition-transform active:scale-95">
-                                    🇮🇹 Série A Clássica
-                                </button>
-                                <button onClick={() => { setLigaSelecionada('La Liga'); setFase('DRAFT'); }} className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-zinc-700 font-bold text-lg flex items-center justify-center gap-2 transition-transform active:scale-95">
-                                    🇪🇸 La Liga Clássica
-                                </button>
-                            </div>
-                        </div>
-                    )}
+    <div className="nostalgia-fc-container mobile-first-wrapper">
+      
+      {/* TELA 1: SELEÇÃO DE LIGA */}
+      {faseJogo === 'SELECAO_LIGA' && (
+        <div className="tela-selecao-liga text-center">
+          <h1 className="titulo-retro">NOSTALGIA FC</h1>
+          <p className="subtitulo-retro">Escolha a sua liga clássica de início:</p>
+          
+          <div className="botoes-liga-container">
+            <button 
+              className="btn-retro btn-italia"
+              onClick={() => {
+                setLigaSelecionada('Série A');
+                setFaseJogo('DRAFT');
+              }}
+            >
+              🇮🇹 Il Calcio (Anos 90/00)
+            </button>
+            
+            <button 
+              className="btn-retro btn-espanha"
+              onClick={() => {
+                setLigaSelecionada('La Liga');
+                setFaseJogo('DRAFT');
+              }}
+            >
+              🇪🇸 La Liga Clássica (Anos 90/00)
+            </button>
+          </div>
+        </div>
+      )}
 
-                    {/* TELA 2: O QUADRO DO DRAFT */}
-                    {fase === 'DRAFT' && (
-                        <div className="flex flex-col flex-1 space-y-4">
-                            <div className="flex justify-between items-center bg-zinc-800 p-3 rounded-xl border border-zinc-700">
-                                <div>
-                                    <span className="text-xs text-zinc-400 font-bold block uppercase tracking-wider">Competição</span>
-                                    <span className="font-black text-amber-500">{ligaSelecionada === 'Série A' ? '🇮🇹 Série A' : '🇪🇸 La Liga'}</span>
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-xs text-zinc-400 font-bold block uppercase tracking-wider">Salary Cap</span>
-                                    <span className="font-black text-green-400 text-lg">${orcamento}M</span>
-                                </div>
-                            </div>
-
-                            <h2 className="text-xs font-black uppercase text-zinc-400 tracking-widest">Escalação Titular (4-3-3)</h2>
-                            <div className="grid grid-cols-4 gap-2">
-                                {posicoesSlots.map((pos, idx) => (
-                                    <button key={idx} onClick={() => iniciarDraftSlot(idx, 'titular')} className={`p-2 rounded-lg text-left relative flex flex-col justify-between h-16 transition-all ${meuTimeTitular[idx] ? 'bg-zinc-800 border-l-4 border-amber-500' : 'bg-zinc-900 border border-dashed border-zinc-700'}`}>
-                                        <span className="text-[10px] font-black text-zinc-500 uppercase">{pos}</span>
-                                        <span className="text-xs font-bold truncate w-full">{meuTimeTitular[idx]?.name || 'Girar Dado'}</span>
-                                        {meuTimeTitular[idx] && <span className="absolute top-1 right-1 text-[10px] font-black text-amber-400">{meuTimeTitular[idx].rating}</span>}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <h2 className="text-xs font-black uppercase text-zinc-400 tracking-widest mt-2">Banco de Reservas</h2>
-                            <div className="grid grid-cols-5 gap-1.5">
-                                {meuTimeReserva.map((_, idx) => (
-                                    <button key={idx} onClick={() => iniciarDraftSlot(idx, 'reserva')} className={`p-1.5 rounded-lg text-center h-14 flex flex-col justify-between transition-all ${meuTimeReserva[idx] ? 'bg-zinc-800 border-t-2 border-green-500' : 'bg-zinc-900 border border-dashed border-zinc-700'}`}>
-                                        <span className="text-[9px] font-bold text-zinc-500">RES</span>
-                                        <span className="text-[10px] font-bold truncate w-full">{meuTimeReserva[idx]?.name || 'Dado'}</span>
-                                    </button>
-                                ))}
-                            </div>
-
-                            {opcoesDraft.length > 0 && (
-                                <div className="bg-zinc-950 p-3 rounded-xl border-2 border-amber-500 space-y-2 mt-auto">
-                                    <div className="text-xs font-black text-amber-500 uppercase tracking-wider">🎲 O Dado parou! Escolha uma opção:</div>
-                                    <div className="space-y-2">
-                                        {opcoesDraft.map((op, i) => (
-                                            <button key={i} onClick={() => escolherJogador(op)} className="w-full flex justify-between items-center bg-zinc-900 p-2.5 rounded-lg border border-zinc-800 hover:bg-zinc-800 transition-colors">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-black bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">{op.posicao}</span>
-                                                    <span className="font-bold text-sm">{op.name}</span>
-                                                    <span className="text-xs text-zinc-500">({op.time})</span>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xs font-bold text-amber-400">Nível {op.rating}</span>
-                                                    <span className="text-xs font-black text-green-400">${op.cost}M</span>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <button onClick={iniciarFasePartida} disabled={meuTimeTitular.includes(null)} className="w-full py-3.5 mt-auto bg-green-600 hover:bg-green-500 disabled:opacity-40 font-black rounded-xl text-center uppercase tracking-wider transition-all shadow-lg shadow-green-900/20">
-                                Avançar para a Partida 🡢
-                            </button>
-                        </div>
-                    )}
-
-                    {/* TELA 3: SIMULAÇÃO 90 MINUTOS */}
-                    {(fase === 'PRE_PARTIDA' || fase === 'EM_JOGO') && (
-                        <div className="flex flex-col flex-1 space-y-4">
-                            <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center text-center">
-                                <div className="w-1/3">
-                                    <span className="font-black text-sm block truncate">MEU TIME</span>
-                                    <span className="text-3xl font-black text-white">{partida.placarSeu}</span>
-                                </div>
-                                <div className="bg-zinc-800 px-3 py-1 rounded-full text-xs font-black text-amber-400">
-                                    {partida.minuto}'
-                                </div>
-                                <div className="w-1/3">
-                                    <span className="font-black text-sm block truncate text-zinc-400">{timeAdversario?.nome}</span>
-                                    <span className="text-3xl font-black text-zinc-400">{partida.placarAdv}</span>
-                                </div>
-                            </div>
-
-                            <div className="bg-zinc-900 p-3 rounded-xl min-h-[60px] border border-zinc-800 flex items-center justify-center text-center text-sm font-bold text-zinc-300">
-                                {narracao}
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2">
-                                {['DEFENSIVO', 'EQUILIBRADO', 'OFENSIVO'].map((grito) => (
-                                    <button key={grito} onClick={() => setGritoTecnico(grito)} className={`py-2 rounded-lg font-black text-xs uppercase tracking-wider transition-all ${gritoTecnico === grito ? 'bg-amber-500 text-neutral-950 scale-105' : 'bg-zinc-800 text-zinc-400'}`}>
-                                        {grito}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="mt-auto space-y-2">
-                                <button onClick={() => setPartida(prev => ({ ...prev, emAndamento: !prev.emAndamento }))} disabled={partida.minuto >= 90} className={`w-full py-3.5 rounded-xl font-black uppercase text-sm tracking-wider shadow-md ${partida.emAndamento ? 'bg-yellow-600' : 'bg-green-600'}`}>
-                                    {partida.minuto >= 90 ? '🏁 Partida Encerrada' : partida.emAndamento ? '⏸️ Pausar Simulação' : '▶️ Iniciar Partida'}
-                                </button>
-                                
-                                <button onClick={() => { setFase('MENU_LIGA'); setMeuTimeTitular(Array(11).fill(null)); setMeuTimeReserva(Array(5).fill(null)); setOrcamento(750); }} disabled={partida.minuto < 90} className="w-full bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl font-bold text-xs uppercase tracking-widest text-zinc-400 disabled:opacity-20">
-                                    Voltar ao Menu Inicial 🡠
-                                </button>
-                            </div>
-                        </div>
-                    )}
+      {/* TELA 2: INTERFACE DE DRAFT ADAPTADA */}
+      {faseJogo === 'DRAFT' && (
+        <div className="tela-draft">
+          <div className="header-draft">
+            <h3>Montando Elenco: {ligaSelecionada === 'Série A' ? '🇮🇹 Série A' : '🇪🇸 La Liga'}</h3>
+            <p>Posição Atual: <strong>{posicoesOrdem[posicaoAtualDraft]}</strong></p>
+          </div>
+          
+          {opcoesDraft.length === 0 ? (
+            <button className="btn-retro btn-girar" onClick={rolarDadoDraft}>
+              🎲 Rolar Dado de Posição
+            </button>
+          ) : (
+            <div className="opcoes-draft-grid">
+              {opcoesDraft.map((jogador) => (
+                <div key={jogador.id} className="card-jogador-retro">
+                  <h4>{jogador.nome}</h4>
+                  <p>Clube Histórico: {jogador.clube}</p>
+                  <p>Rating: {jogador.rating} | Moral: {jogador.moral}</p>
+                  <button 
+                    className="btn-retro btn-selecionar"
+                    onClick={() => escolherJogador(jogador)}
+                  >
+                    Contratar
+                  </button>
                 </div>
-            );
-        }
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TELA 3: MENU PRINCIPAL / TABULEIRO TÁTICO */}
+      {faseJogo === 'MENU_PRINCIPAL' && (
+        <div className="tela-gerenciamento">
+          {/* Componente do Tabuleiro Tático Visual e chamada para o motor.js */}
+          <h2>Seu Time Pronto para a Copa!</h2>
+          <p>Liga disputada: {ligaSelecionada}</p>
+          {/* ... renderização dos titulares, reservas e botão de Iniciar Partida ... */}
+        </div>
+      )}
+
+    </div>
+  );
+}
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
