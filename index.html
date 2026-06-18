@@ -1,15 +1,296 @@
-<!-- index.html -->
-<script type="module" src="./src/data/database.js"></script>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nostalgia FC - Manager v2</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="jogadores.js"></script>
+    <script src="motor.js"></script>
+    <style>
+        body { background: #0A0A0A; color: #FFF; font-family: system-ui, sans-serif; user-select: none; }
+        .campo-gramado { background: linear-gradient(to bottom, #15803d 50%, #166534 50%); background-size: 100% 40px; border: 4px solid #FFF; position: relative; }
+        .linha-meio { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: rgba(255,255,255,0.6); }
+        .circulo-central { position: absolute; top: 50%; left: 50%; width: 70px; height: 70px; border: 2px solid rgba(255,255,255,0.6); border-radius: 50%; transform: translate(-50%, -50%); }
+    </style>
+</head>
+<body class="p-2">
+    <div id="root"></div>
 
-<script type="module" src="./src/components/MatchEngine.js"></script>
-<script type="module" src="./src/components/CardJogador.js"></script>
-<script type="module" src="./src/components/Poster.js"></script>
+    <script type="text/babel">
+        function App() {
+            const [fase, setFase] = React.useState("DRAFT"); // DRAFT, ESTRATEGIA, JOGO
+            const [orcamento, setOrcamento] = React.useState(1100);
+            const [elenco, setElenco] = React.useState([]);
+            const [titulares, setTitulares] = React.useState([]);
+            const [reservas, setReservas] = React.useState([]);
+            
+            const [jogadorWheel, setJogadorWheel] = React.useState(null);
+            const [estaRolando, setEstaRolando] = React.useState(false);
 
-<script type="module">
-  import { CLUBES } from './src/data/database.js';
-  // Disponibiliza globalmente se necessário para o restante do app
-  window.CLUBES = CLUBES;
+            // Estado do Motor de Partida Clássico
+            const [partida, setPartida] = React.useState({
+                emAndamento: false, minuto: 0, meuPlacar: 0, placarRival: 0,
+                postura: "NORMAL", substituiçõesFeitas: 0,
+                rival: { nome: "Milan '94 Classic", forca: 82 },
+                titulares: [], reservas: []
+            });
+            const [narracao, setNarracao] = React.useState("Preparados para o apito inicial...");
+            const [bloqueioExpulsao, setBloqueioExpulsao] = React.useState(false);
 
-  // Aqui você inicializa o seu App React
-  // Exemplo: ReactDOM.render(<NostalgiaFCApp />, document.getElementById('app-root'));
-</script>
+            const iniciarSorteio = () => {
+                if (estaRolando || elenco.length >= 16) return;
+                setEstaRolando(true);
+                executarSorteioDraft(orcamento, bancoJogadores, (j) => setJogadorWheel(j), (jFinal, novoOrcamento) => {
+                    if (jFinal) {
+                        const novoElenco = [...elenco, jFinal];
+                        setElenco(novoElenco);
+                        setOrcamento(novoOrcamento);
+                        
+                        // Divide de forma inteligente em titulares (até 11) e reservas (próximos 5)
+                        if (novoTitulares(novoElenco).length <= 11) {
+                            setTitulares(antigo => [...antigo, jFinal]);
+                        } else {
+                            setReservas(antigo => [...antigo, jFinal]);
+                        }
+                    } else {
+                        alert("Moedas insuficientes ou sem limite de orçamento!");
+                    }
+                    setEstaRolando(false);
+                });
+            };
+
+            const novoTitulares = (el) => el.slice(0, 11);
+
+            const alterarPostura = (novaPostura) => {
+                setPartida(antigo => ({ ...antigo, postura: novaPostura }));
+                setNarracao(`📋 Técnico ordena postura de: ${novaPostura === "PRESSAO" ? "⚠️ PRESSÃO TOTAL TÁTICA" : (novaPostura === "RETRANCA" ? "🛡️ RETRANCAR E FAZER CERA" : "⚙️ JOGO COERENTE E EQUILIBRADO")}`);
+            };
+
+            const realizarSubstituicao = (titularId, reservaId) => {
+                if (partida.substituiçõesFeitas >= 1 && !bloqueioExpulsao) {
+                    alert("Você já esgotou a sua substituição tática estratégica permitida!");
+                    return;
+                }
+
+                let tIdx = partida.titulares.findIndex(j => j.idUnico === titularId);
+                let rIdx = partida.reservas.findIndex(j => j.idUnico === reservaId);
+
+                if (tIdx === -1 && bloqueioExpulsao) {
+                    // Cobre vaga de buraco de expulsão
+                    let jogadorEntrando = partida.reservas[rIdx];
+                    let novosReservas = partida.reservas.filter(j => j.idUnico !== reservaId);
+                    let novosTitulares = [...partida.titulares, jogadorEntrando];
+                    
+                    setPartida(antigo => ({
+                        ...antigo, titulares: novosTitulares, reservas: novosReservas,
+                        substituiçõesFeitas: antigo.substituiçõesFeitas + 1
+                    }));
+                    setBloqueioExpulsao(false);
+                    setNarracao(`🔄 Substituição Emergencial! Entra ${jogadorEntrando.name} para cobrir o desfalque da expulsão.`);
+                    return;
+                }
+
+                let jogadorSaindo = partida.titulares[tIdx];
+                let jogadorEntrando = partida.reservas[rIdx];
+
+                let novosTitulares = [...partida.titulares];
+                let novosReservas = [...partida.reservas];
+
+                novosTitulares[tIdx] = jogadorEntrando;
+                novosReservas[rIdx] = jogadorSaindo;
+
+                setPartida(antigo => ({
+                    ...antigo, titulares: novosTitulares, reservas: novosReservas,
+                    substituiçõesFeitas: antigo.substituiçõesFeitas + 1
+                }));
+                setNarracao(`🔄 Alteração! Sai: ${jogadorSaindo.name} -> Entra: ${jogadorEntrando.name}`);
+                setBloqueioExpulsao(false);
+            };
+
+            const avancarCronometro = () => {
+                simularMinutoPartida(partida, setPartida, 
+                    (msg) => setNarracao(msg), 
+                    (msgAlerta, precisaCofre) => {
+                        setNarracao(msgAlerta);
+                        if (precisaCofre) setBloqueioExpulsao(true);
+                    }
+                );
+            };
+
+            React.useEffect(() => {
+                let rodarLoop;
+                if (partida.emAndamento && !bloqueioExpulsao) {
+                    rodarLoop = setInterval(avancarCronometro, 1500);
+                }
+                return () => clearInterval(rodarLoop);
+            }, [partida.emAndamento, partida.minuto, bloqueioExpulsao]);
+
+            return (
+                <div className="max-w-md mx-auto bg-zinc-900 min-h-screen rounded-2xl shadow-2xl p-3 border border-zinc-800">
+                    {/* ABRE TELA 1: ETAPA DE DRAFT */}
+                    {fase === "DRAFT" && (
+                        <div>
+                            <div className="flex justify-between items-center mb-4">
+                                <h1 className="text-2xl font-black italic text-orange-500">NOSTALGIA FC</h1>
+                                <span className="bg-zinc-800 px-3 py-1 rounded text-sm font-bold">Orçamento: {orcamento} pts</span>
+                            </div>
+
+                            <div className="bg-black p-4 rounded-xl text-center border-2 border-orange-500 mb-4 h-28 flex flex-col justify-center">
+                                {jogadorWheel ? (
+                                    <div>
+                                        <div className="text-xs text-orange-400 font-bold uppercase">{jogadorWheel.time}</div>
+                                        <div className="text-xl font-bold">{jogadorWheel.name} [{jogadorWheel.posicao}]</div>
+                                        <div className="text-xs text-zinc-500">Custo de Registro: {jogadorWheel.cost} pts</div>
+                                    </div>
+                                ) : <div className="font-mono text-zinc-500">ROLE A ROLETA PARA CONTRATAR</div>}
+                            </div>
+
+                            <button onClick={iniciarSorteio} disabled={estaRolando || elenco.length >= 16} className="w-full bg-orange-600 hover:bg-orange-500 py-3 rounded-lg font-bold uppercase tracking-wider transition-all mb-4 disabled:opacity-50">
+                                {estaRolando ? "Girando a roleta clássica..." : `CONTRATAR ATLETA (${elenco.length}/16)`}
+                            </button>
+
+                            <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800 max-h-64 overflow-y-auto">
+                                <div className="text-xs text-zinc-500 uppercase font-black tracking-widest mb-2">Contratados do Time:</div>
+                                {elenco.map((j, i) => {
+                                    let s = obterModificadorSetinha(j.moral);
+                                    return (
+                                        <div key={i} className="flex justify-between items-center bg-zinc-900 p-2 rounded mb-1 text-sm border-l-4 border-orange-500">
+                                            <span>{j.name} <b className="text-zinc-500">[{j.posicao}]</b></span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-bold ${s.cor}`}>{s.icone} ★{j.rating + s.mod}</span>
+                                                <span className="text-xs bg-zinc-800 px-1 text-green-400">⚡{j.estamina}%</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {elenco.length >= 16 && (
+                                <button onClick={() => { setPartida(ant => ({ ...ant, titulares: [...titulares], reservas: [...reservas] })); setFase("ESTRATEGIA"); }} className="w-full mt-4 bg-green-600 hover:bg-green-500 py-3 rounded-lg font-black uppercase text-center text-white">
+                                    IR PARA O CAMPO TÁTICO 🡢
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ABRE TELA 2: QUADRO TÁTICO DO MANAGER */}
+                    {fase === "ESTRATEGIA" && (
+                        <div>
+                            <h2 className="text-lg font-black text-center text-green-400 mb-2 uppercase tracking-wide">Quadro Tático do Professor</h2>
+                            
+                            {/* Visualização de Mini Campo de Futebol Gramado */}
+                            <div className="campo-gramado w-full h-44 rounded-lg overflow-hidden flex flex-wrap justify-around items-center p-2 mb-4">
+                                <div className="linha-meio"></div>
+                                <div className="circulo-central"></div>
+                                {partida.titulares.map((j, i) => (
+                                    <div key={i} className="bg-black/80 px-2 py-0.5 rounded text-[10px] text-white font-bold text-center border border-white max-w-[75px] truncate">
+                                        {j.name} <span className="text-orange-400 block">{j.posicao}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                <div className="bg-zinc-950 p-2 rounded border border-zinc-800 max-h-56 overflow-y-auto">
+                                    <h3 className="text-xs font-bold text-zinc-400 uppercase mb-1">Titulares (11)</h3>
+                                    {partida.titulares.map((j, i) => (
+                                        <div key={i} className="text-xs bg-zinc-900 p-1 mb-1 rounded flex justify-between">
+                                            <span>{j.name}</span>
+                                            <span className="text-green-400">⚡{j.estamina}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="bg-zinc-950 p-2 rounded border border-zinc-800 max-h-56 overflow-y-auto">
+                                    <h3 className="text-xs font-bold text-zinc-400 uppercase mb-1">Banco de Reservas (5)</h3>
+                                    {partida.reservas.map((j, i) => (
+                                        <div key={i} className="text-xs bg-zinc-900 p-1 mb-1 rounded flex justify-between">
+                                            <span>{j.name}</span>
+                                            <span className="text-green-400">⚡{j.estamina}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button onClick={() => setFase("JOGO")} className="w-full bg-red-600 hover:bg-red-500 py-4 rounded-xl text-lg font-black uppercase">
+                                ⚽ ENTRAR EM CAMPO / JOGAR
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ABRE TELA 3: MOTOR DE JOGO INTERATIVO MINUTO A MINUTO */}
+                    {fase === "JOGO" && (
+                        <div>
+                            <div className="bg-black p-3 rounded-xl border border-zinc-800 flex justify-between items-center mb-4">
+                                <div className="text-center">
+                                    <div className="text-xs font-bold text-zinc-400">Nostalgia FC</div>
+                                    <div className="text-3xl font-black text-orange-500">{partida.meuPlacar}</div>
+                                </div>
+                                <div className="bg-zinc-900 px-3 py-1 rounded-full font-mono text-xl font-bold text-yellow-400 animate-pulse">
+                                    {partida.minuto}'
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-xs font-bold text-zinc-400 truncate w-24">{partida.rival.nome}</div>
+                                    <div className="text-3xl font-black text-white">{partida.placarRival}</div>
+                                </div>
+                            </div>
+
+                            {/* Caixa de Texto do Narrador */}
+                            <div className="bg-zinc-950 p-4 rounded-xl border-2 border-zinc-800 font-mono text-sm text-green-400 min-h-20 mb-4 shadow-inner">
+                                {narracao}
+                            </div>
+
+                            {/* Comando em Tempo Real do Manager */}
+                            <div className="bg-zinc-900 p-2 rounded-xl mb-4">
+                                <div className="text-xs text-zinc-400 font-bold uppercase mb-2 text-center">Painel de Gritos do Técnico:</div>
+                                <div className="grid grid-cols-3 gap-1">
+                                    <button onClick={() => alterarPostura("RETRANCA")} className={`py-2 rounded font-bold text-xs uppercase ${partida.postura === "RETRANCA" ? 'bg-blue-600' : 'bg-zinc-800'}`}>🛡️ Retrancar / Cera</button>
+                                    <button onClick={() => alterarPostura("NORMAL")} className={`py-2 rounded font-bold text-xs uppercase ${partida.postura === "NORMAL" ? 'bg-zinc-700' : 'bg-zinc-800'}`}>⚙️ Equilibrado</button>
+                                    <button onClick={() => alterarPostura("PRESSAO")} className={`py-2 rounded font-bold text-xs uppercase ${partida.postura === "PRESSAO" ? 'bg-red-600' : 'bg-zinc-800'}`}>⚠️ Pressão Total</button>
+                                </div>
+                            </div>
+
+                            {/* Menu de Substituição em Campo */}
+                            <div className="bg-black p-3 rounded-xl border border-zinc-800 mb-4">
+                                <div className="text-xs font-bold text-zinc-500 uppercase mb-2">Comandar Substituição ({partida.substituiçõesFeitas}/1 permitida):</div>
+                                <div className="flex gap-2">
+                                    <select id="select-titular" className="bg-zinc-900 text-white p-2 rounded text-xs w-1/2 border border-zinc-700">
+                                        <option value="">Selecione quem sai...</option>
+                                        {partida.titulares.map((j, i) => <option key={i} value={j.idUnico}>{j.name} ({j.posicao}) - ⚡{j.estamina}%</option>)}
+                                    </select>
+                                    <select id="select-reserva" className="bg-zinc-900 text-white p-2 rounded text-xs w-1/2 border border-zinc-700">
+                                        <option value="">Selecione quem entra...</option>
+                                        {partida.reservas.map((j, i) => <option key={i} value={j.idUnico}>{j.name} ({j.posicao}) - ⚡{j.estamina}%</option>)}
+                                    </select>
+                                </div>
+                                <button onClick={() => {
+                                    let t = document.getElementById('select-titular').value;
+                                    let r = document.getElementById('select-reserva').value;
+                                    if(r) realizarSubstituicao(t, r);
+                                }} className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs py-2 rounded font-bold uppercase">
+                                    {bloqueioExpulsao ? "🚨 EFETUAR MUDANÇA OBRIGATÓRIA" : "Confirmar Troca Tática"}
+                                </button>
+                            </div>
+
+                            {/* Controles do Tempo de Partida */}
+                            <div className="flex gap-2">
+                                <button onClick={() => setPartida(ant => ({ ...ant, emAndamento: !ant.emAndamento }))} disabled={bloqueioExpulsao} className={`w-1/2 py-3 rounded-lg font-black uppercase ${partida.emAndamento ? 'bg-yellow-600' : 'bg-green-600'} disabled:opacity-30`}>
+                                    {partida.emAndamento ? "⏸️ Pausar Jogo" : "▶️ Iniciar/Correr"}
+                                </button>
+                                <button onClick={() => { setFase("DRAFT"); setNarracao("Preparando para a próxima rodada..."); }} disabled={partida.minuto < 90 && partida.minuto > 0} className="w-1/2 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-lg font-black uppercase disabled:opacity-30">
+                                    Próxima Partida 🡢
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
