@@ -1,6 +1,14 @@
+# 1. Configurações de Build (O que estava na Imagem 2)
 [build]
   command = "npm install && npm run build"
   publish = "build"
 
 [build.environment]
   NODE_VERSION = "18"
+
+# 2. Configurações de Redirecionamento (O que estava na Imagem 1)
+# Isso é vital para o React Router não dar erro 404 ao atualizar a página
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
