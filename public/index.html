@@ -2,358 +2,90 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nostalgia FC - Manager v2 (Expansão Ligas)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nostalgia FC</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="jogadores.js"></script>
+    <!-- Certifique-se de que jogadores.js e motor.js contenham apenas variáveis globais sem 'export' -->
+    <script src="jogadores.js"></script> 
     <script src="motor.js"></script>
     <style>
-    /* Global & Field */
-    body { background: #0A0A0A; color: #FFF; font-family: system-ui, sans-serif; user-select: none; }
-    .campo-gramado { background: linear-gradient(to bottom, #15803d 50%, #166534 50%); background-size: 100% 40px; border: 4px solid #FFF; position: relative; }
-    .linha-meio { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: rgba(255,255,255,0.6); }
-    .circulo-central { position: absolute; top: 50%; left: 50%; width: 70px; height: 70px; border: 2px solid rgba(255,255,255,0.6); border-radius: 50%; transform: translate(-50%, -50%); }
-
-    /* Container de Seleção */
-    .botoes-liga-container {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        margin: 35px auto;
-        max-width: 320px;
-        padding: 0 15px;
-    }
-
-    /* Base de Design de Botão 16-Bit / Pixel Art */
-    .btn-retro {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 1.15rem;
-        font-weight: 900;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        padding: 18px 20px;
-        border: 4px solid #000000;
-        border-radius: 0px;
-        box-shadow: 6px 6px 0px #000000;
-        cursor: pointer;
-        position: relative;
-        transition: all 0.05s ease;
-    }
-
-    /* Efeito de Clique Físico */
-    .btn-retro:active {
-        transform: translate(4px, 4px);
-        box-shadow: 2px 2px 0px #000000;
-    }
-
-    /* 🇮🇹 Itália: Azul e Branco */
-    .btn-italia {
-        background-color: #004BB4;
-        color: #FFFFFF;
-        text-shadow: 2px 2px 0px #000000;
-    }
-
-    .btn-italia:hover { background-color: #005ce6; }
-
-    /* 🇪🇸 Espanha: Vermelho e Amarelo */
-    .btn-espanha {
-        background-color: #C60B1E;
-        color: #F1BF00;
-        text-shadow: 2px 2px 0px #000000;
-    }
-
-    .btn-espanha:hover { background-color: #e60e24; }
-
-    /* Título */
-    .titulo-retro {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #f1bf00;
-        text-shadow: 4px 4px 0px #000;
-        margin-bottom: 5px;
-        text-align: center;
-    }
-</style>
+        body { background: #0A0A0A; color: #FFF; font-family: sans-serif; }
+        .titulo-retro { font-size: 2.5rem; color: #f1bf00; text-align: center; margin-top: 50px; }
+        .botoes-liga-container { display: flex; flex-direction: column; gap: 20px; max-width: 300px; margin: 40px auto; }
+        .btn-retro { padding: 18px; border: 4px solid #000; font-weight: 900; cursor: pointer; text-transform: uppercase; }
+        .btn-italia { background-color: #004BB4; color: #fff; }
+        .btn-espanha { background-color: #C60B1E; color: #F1BF00; }
+    </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-function App() {
-  // Estados do Fluxo de Telas
-  const [faseJogo, setFaseJogo] = React.useState('SELECAO_LIGA'); // Inicializa na seleção de liga
-  const [ligaSelecionada, setLigaSelecionada] = React.useState(''); // 'Série A' ou 'La Liga'
-  
-  // Estados do Time do Usuário
-  const [titulares, setTitulares] = React.useState([]);
-  const [reservas, setReservas] = React.useState([]);
-  
-  // Estado do processo de Draft atual
-  const [posicaoAtualDraft, setPosicaoAtualDraft] = React.useState(0); // Ex: 0 = Goleiro, 1 = Lateral...
-  const [opcoesDraft, setOpcoesDraft] = React.useState([]);
+    function App() {
+        const [faseJogo, setFaseJogo] = React.useState('SELECAO_LIGA');
+        const [ligaSelecionada, setLigaSelecionada] = React.useState('');
+        const [titulares, setTitulares] = React.useState([]);
+        const [reservas, setReservas] = React.useState([]);
+        const [opcoesDraft, setOpcoesDraft] = React.useState([]);
+        const [orcamento, setOrcamento] = React.useState(100000);
 
-  // Ordem sequencial do Draft clássico por posições
-  const posicoesOrdem = ['GOL', 'ZAG', 'ZAG', 'LAT_ESQ', 'LAT_DIR', 'VOL', 'MEI', 'MEI', 'ATA', 'ATA', 'ATA', 'RES', 'RES', 'RES', 'RES', 'RES'];
+        // Acessa PLAYERS_DB e bancoJogadores globalmente (devem estar em jogadores.js)
+        const rolarDadoDraft = () => {
+            if (typeof PLAYERS_DB === 'undefined') {
+                alert("Erro: Base de dados não carregada.");
+                return;
+            }
+            // Filtra os jogadores da liga selecionada
+            const candidatos = Object.values(PLAYERS_DB)
+                .flat()
+                .filter(jog => jog.liga === ligaSelecionada);
 
-  // Função para rolar o dado injetando o filtro de liga
-  const rolarDadoDraft = () => {
-    const posicaoBuscada = posicoesOrdem[posicaoAtualDraft];
-    
-    // -> O PULO DO GATO: Filtrando a base do jogadores.js pela liga e posição atual
-    const candidatos = listaJogadoresGlobal.filter(jog => 
-      jog.liga === ligaSelecionada && 
-      (posicaoBuscada === 'RES' ? true : jog.posicao === posicaoBuscada)
-    );
+            const embaralhado = [...candidatos].sort(() => 0.5 - Math.random());
+            setOpcoesDraft(embaralhado.slice(0, 3));
+        };
 
-    // Seleciona 3 opções aleatórias (estilo Draft clássico) para o usuário escolher uma
-    const embaralhado = [...candidatos].sort(() => 0.5 - Math.random());
-    const selecionados = embaralhado.slice(0, 3);
-    
-    setOpcoesDraft(selecionados);
-    
-    // Estados de controle financeiro
-const [orcamento, setOrcamento] = React.useState(100000); // Exemplo: 100k de Salary Cap inicial
+        const escolherJogador = (jogador) => {
+            if (jogador.custo > orcamento) {
+                alert("Orçamento insuficiente!");
+                return;
+            }
+            setOrcamento(prev => prev - jogador.custo);
+            setTitulares(prev => [...prev, jogador]);
+            setOpcoesDraft([]);
+        };
 
-const escolherJogador = (jogadorSelecionado) => {
-  // 1. VERIFICAÇÃO DA TRAVA: O orçamento é suficiente?
-  if (jogadorSelecionado.custo > orcamento) {
-    alert(`🚨 FINANÇAS EM CRISE!\nO custo de ${jogadorSelecionado.nome} (${jogadorSelecionado.custo}) ultrapassa o seu saldo restante (${orcamento}). Escolha outro!`);
-    return; // Bloqueia a execução e não avança o Draft
-  }
+        return (
+            <div>
+                {faseJogo === 'SELECAO_LIGA' && (
+                    <div className="text-center">
+                        <h1 className="titulo-retro">NOSTALGIA FC</h1>
+                        <div className="botoes-liga-container">
+                            <button className="btn-retro btn-italia" onClick={() => { setLigaSelecionada('Série A'); setFaseJogo('DRAFT'); }}>SÉRIE A</button>
+                            <button className="btn-retro btn-espanha" onClick={() => { setLigaSelecionada('La Liga'); setFaseJogo('DRAFT'); }}>LA LIGA</button>
+                        </div>
+                    </div>
+                )}
 
-  // 2. SE PASSOU NA TRAVA: Deduz o valor e adiciona ao elenco
-  setOrcamento(prev => prev - jogadorSelecionado.custo);
-
-  const posicaoBuscada = posicoesOrdem[posicaoAtualDraft];
-
-  if (posicaoBuscada === 'RES') {
-    setReservas(prev => [...prev, { ...jogadorSelecionado, stamina: 100, moral: jogadorSelecionado.moral || 'NORMAL' }]);
-  } else {
-    setTitulares(prev => [...prev, { ...jogadorSelecionado, stamina: 100, moral: jogadorSelecionado.moral || 'NORMAL' }]);
-  }
-
-  // Clear nas opções atuais para forçar o próximo giro de dados
-  setOpcoesDraft([]);
-
-  // 3. FLUXO DE AVANÇO OU FINALIZAÇÃO DO DRAFT
-  if (posicaoAtualDraft + 1 < posicoesOrdem.length) {
-    setPosicaoAtualDraft(prev => prev + 1);
-  } else {
-    // Fim do Draft! Avança para o Menu Principal onde a Copa será montada
-    setFaseJogo('MENU_PRINCIPAL');
-  }
-};
-  };
-
-  // ... (resto das funções de escolha do jogador e avanço de posição)
-
-            // === REGRA DE OURO: ROLAGEM DO DADO POR POSIÇÃO SEM REPETIÇÃO DE NOME ===
-            const rolarDadoPorPosicao = (posicaoAtual) => {
-                let candidatos = bancoJogadores.filter(j => j.liga === ligaSelecionada && j.posicao === posicaoAtual);
-                
-                // Remove qualquer jogador cujo NOME já esteja no time (titular ou reserva)
-                const nomesNoMeuTime = [...meuTimeTitular, ...meuTimeReserva].filter(Boolean).map(j => j.name);
-                candidatos = candidatos.filter(j => !nomesNoMeuTime.includes(j.name));
-
-                // Fallback de segurança para não quebrar caso acabem os jogadores
-                if (candidatos.length === 0) {
-                    candidatos = bancoJogadores.filter(j => j.posicao === posicaoAtual && j.liga === ligaSelecionada);
-                }
-
-                const indiceSorteado = Math.floor(Math.random() * candidatos.length);
-                return candidatos[indiceSorteado];
-            };
-
-            // === SISTEMA DE DRAFT POR SLOT ===
-            const iniciarDraftSlot = (index, tipo) => {
-                setSlotSelecionado({ index, tipo });
-                const posicaoNecessaria = tipo === 'titular' ? posicoesSlots[index] : 'MIX';
-                
-                let cookiesOpc = [];
-                let tentativas = 0;
-                
-                while(cookiesOpc.length < 3 && tentativas < 50) {
-                    tentativas++;
-                    const posSorteio = posicaoNecessaria === 'MIX' ? ['ZAG','MEI','ATA'][Math.floor(Math.random()*3)] : posicaoNecessaria;
-                    let jogadorSorteado = rolarDadoPorPosicao(posSorteio);
-                    
-                    if (jogadorSorteado && !cookiesOpc.some(o => o.name === jogadorSorteado.name)) {
-                        cookiesOpc.push({
-                            ...jogadorSorteado,
-                            moral: ['🡢', '🡡', '🡣', '🡤', '🡥'][Math.floor(Math.random() * 5)],
-                            estamina: 100
-                        });
-                    }
-                }
-                setOpcoesDraft(cookiesOpc);
-            };
-
-            const escolherJogador = (jogador) => {
-                if (orcamento < jogador.cost) {
-                    alert('🚨 SALARY CAP INSUFICIENTE!');
-                    return;
-                }
-
-                setOrcamento(prev => prev - jogador.cost);
-                if (slotSelecionado.tipo === 'titular') {
-                    const novo = [...meuTimeTitular];
-                    novo[slotSelecionado.index] = jogador;
-                    setMeuTimeTitular(novo);
-                } else {
-                    const novo = [...meuTimeReserva];
-                    novo[slotSelecionado.index] = jogador;
-                    setMeuTimeReserva(novo);
-                }
-                setSlotSelecionado(null);
-                setOpcoesDraft([]);
-            };
-
-            // === ADVERSÁRIO COERENTE COM A LIGA SELECIONADA ===
-            const iniciarFasePartida = () => {
-                const timesDaLiga = [...new Set(bancoJogadores.filter(j => j.liga === ligaSelecionada).map(j => j.time))];
-                const timeSorteado = timesDaLiga[Math.floor(Math.random() * timesDaLiga.length)];
-                
-                setTimeAdversario({
-                    nome: timeSorteado,
-                    ratingGeral: Math.floor(Math.random() * 10) + 82
-                });
-
-                setPartida({
-                    minuto: 0, placarSeu: 0, placarAdv: 0, emAndamento: false, historico: []
-                });
-                setFase('PRE_PARTIDA');
-            };
-
-            // === CONTROLES DO MOTOR DE SIMULAÇÃO ===
-            React.useEffect(() => {
-                let intervalo = null;
-                if (partida.emAndamento && partida.minuto < 90) {
-                    intervalo = setInterval(() => {
-                        setPartida(prev => {
-                            if (prev.minuto >= 90) {
-                                clearInterval(intervalo);
-                                return { ...prev, emAndamento: false };
-                            }
-
-                            const forcaSua = meuTimeTitular.filter(Boolean).reduce((acc, j) => acc + j.rating, 0) / 11;
-                            const modGrito = gritoTecnico === 'OFENSIVO' ? 1.1 : gritoTecnico === 'DEFENSIVO' ? 0.9 : 1.0;
-                            
-                            let lance = Math.random() * 100;
-                            let novoPlacarSeu = prev.placarSeu;
-                            let novoPlacarAdv = prev.placarAdv;
-                            let eventoTexto = '';
-
-                            if (lance > 96) {
-                                if ((forcaSua * modGrito) > timeAdversario.ratingGeral) {
-                                    novoPlacarSeu++;
-                                    eventoTexto = `⚽ GOL DO NOSSO TIME! Minuto ${prev.minuto + 5}!`;
-                                } else {
-                                    novoPlacarAdv++;
-                                    eventoTexto = `⚠️ Gol do ${timeAdversario.nome}! Minuto ${prev.minuto + 5}.`;
-                                }
-                                setNarracao(eventoTexto);
-                            }
-
-                            return {
-                                ...prev,
-                                minuto: prev.minuto + 5,
-                                placarSeu: novoPlacarSeu,
-                                placarAdv: novoPlacarAdv,
-                                historico: eventoTexto ? [...prev.historico, eventoTexto] : prev.historico
-                            };
-                        });
-                    }, 600);
-                } else {
-                    clearInterval(intervalo);
-                }
-                return () => clearInterval(intervalo);
-            }, [partida.emAndamento, partida.minuto]);
-
-            return (
-    <div className="nostalgia-fc-container mobile-first-wrapper">
-      
-      {/* TELA 1: SELEÇÃO DE LIGA */}
-      {faseJogo === 'SELECAO_LIGA' && (
-        <div className="tela-selecao-liga text-center">
-          <h1 className="titulo-retro">NOSTALGIA FC</h1>
-          <p className="subtitulo-retro">Escolha a sua liga clássica de início:</p>
-          
-          <div className="botoes-liga-container">
-            <button 
-              className="btn-retro btn-italia"
-              onClick={() => {
-                setLigaSelecionada('Série A');
-                setFaseJogo('DRAFT');
-              }}
-            >
-              🇮🇹 Il Calcio (Anos 90/00)
-            </button>
-            
-            <button 
-              className="btn-retro btn-espanha"
-              onClick={() => {
-                setLigaSelecionada('La Liga');
-                setFaseJogo('DRAFT');
-              }}
-            >
-              🇪🇸 La Liga Clássica (Anos 90/00)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* TELA 2: INTERFACE DE DRAFT ADAPTADA */}
-      {faseJogo === 'DRAFT' && (
-        <div className="tela-draft">
-          <div className="header-draft">
-            <h3>Montando Elenco: {ligaSelecionada === 'Série A' ? '🇮🇹 Série A' : '🇪🇸 La Liga'}</h3>
-            <p>Posição Atual: <strong>{posicoesOrdem[posicaoAtualDraft]}</strong></p>
-          </div>
-          
-          {opcoesDraft.length === 0 ? (
-            <button className="btn-retro btn-girar" onClick={rolarDadoDraft}>
-              🎲 Rolar Dado de Posição
-            </button>
-          ) : (
-            <div className="opcoes-draft-grid">
-              {opcoesDraft.map((jogador) => (
-                <div key={jogador.id} className="card-jogador-retro">
-                  <h4>{jogador.nome}</h4>
-                  <p>Clube Histórico: {jogador.clube}</p>
-                  <p>Rating: {jogador.rating} | Moral: {jogador.moral}</p>
-                  <button 
-                    className="btn-retro btn-selecionar"
-                    onClick={() => escolherJogador(jogador)}
-                  >
-                    Contratar
-                  </button>
-                </div>
-              ))}
+                {faseJogo === 'DRAFT' && (
+                    <div className="p-4">
+                        <h2 className="text-center">Draft - {ligaSelecionada} | Saldo: {orcamento}</h2>
+                        <button className="btn-retro w-full" onClick={rolarDadoDraft}>🎲 Sortear Jogadores</button>
+                        <div className="mt-5">
+                            {opcoesDraft.map((j, i) => (
+                                <div key={i} className="bg-gray-800 p-4 mb-2" onClick={() => escolherJogador(j)}>
+                                    {j.name} - {j.custo}M
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* TELA 3: MENU PRINCIPAL / TABULEIRO TÁTICO */}
-      {faseJogo === 'MENU_PRINCIPAL' && (
-        <div className="tela-gerenciamento">
-          {/* Componente do Tabuleiro Tático Visual e chamada para o motor.js */}
-          <h2>Seu Time Pronto para a Copa!</h2>
-          <p>Liga disputada: {ligaSelecionada}</p>
-          {/* ... renderização dos titulares, reservas e botão de Iniciar Partida ... */}
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        );
+    }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
     </script>
 </body>
 </html>
