@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { executarSorteioDraft, gerarCopaAdversarios } from './motor';
+import './App.css';
 
 // Lista de posições que o usuário precisa preencher
 const posicoesOrdem = ['GOL', 'ZAG', 'ZAG', 'MEI', 'MEI', 'ATA', 'ATA'];
@@ -12,10 +13,10 @@ function App() {
   const [orcamento, setOrcamento] = useState(ORCAMENTO_INICIAL);
   const [timeUsuario, setTimeUsuario] = useState([]);
   const [posicaoAtualIndex, setPosicaoAtualIndex] = useState(0);
-  const [listaJogadoresGlobal, setListaJogadoresGlobal] = useState([]); // Imagine isso populado com seus dados
+  const [listaJogadoresGlobal, setListaJogadoresGlobal] = useState([]); // Populado com seus dados de jogadores.js
 
   // 1. Iniciar o Draft após escolher a Liga
-  const iniciarDraft = (liga) => {
+  const selecionarLiga = (liga) => {
     setLigaSelecionada(liga);
     setFaseJogo('DRAFT');
   };
@@ -33,91 +34,98 @@ function App() {
     setTimeUsuario(novoTime);
     setOrcamento(orcamento - jogadorSorteado.cost);
 
-    // Avança para a próxima posição
-    const proximaPosicao = posicaoAtualIndex + 1;
-    if (proximaPosicao < posicoesOrdem.length) {
-      setPosicaoAtualIndex(proximaPosicao);
+    // Avança no Loop de Posições
+    if (posicaoAtualIndex + 1 < posicoesOrdem.length) {
+      setPosicaoAtualIndex(posicaoAtualIndex + 1);
     } else {
-      // Fim do Draft: Gera os adversários e vai para o menu
-      const adversarios = gerarCopaAdversarios(listaJogadoresGlobal, ligaSelecionada);
-      console.log("Copa gerada:", adversarios);
-      setFaseJogo('MENU_PRINCIPAL');
+      // Draft Finalizado com Sucesso
+      finalizarDraft(novoTime);
     }
   };
 
-  // 3. Renderização Condicional (A alma da transição de telas)
+  const finalizarDraft = (timeFinal) => {
+    // Chama o motor para gerar a Copa filtrando pela liga correta
+    const adversarios = gerarCopaAdversarios(ligaSelecionada);
+    console.log("Adversários Gerados para a Copa:", adversarios);
+    setFaseJogo('MENU_PRINCIPAL');
+  };
+
   return (
     <div className="game-container">
-      {faseJogo === 'SELECAO_LIGA' && (
-        <div className="retro-menu">
-          <h1>Escolha sua Liga</h1>
-          <button onClick={() => iniciarDraft('ITALIA')}>Série A (Itália)</button>
-          <button onClick={() => iniciarDraft('ESPANHA')}>La Liga (Espanha)</button>
+      {/* Topbar Padrão Nostalgia FC */}
+      <header className="topbar">
+        <div className="nfc-logo">
+          <div className="crest">N</div>
+          <div className="word">NOSTALGIA<span>FC</span></div>
         </div>
-      )}
+      </header>
 
-      {faseJogo === 'DRAFT' && (
-        <div className="draft-screen">
-          <h2>Draftando: {posicoesOrdem[posicaoAtualIndex]}</h2>
-          <p>Orçamento Restante: {orcamento}</p>
-          {/* Aqui você chama a roleta do motor */}
-          <button onClick={() => executarSorteioDraft(
-            orcamento, 
-            listaJogadoresGlobal, 
-            (j) => console.log("Sorteando:", j.name), 
-            () => processarEscolhaJogador({name: "Jogador X", cost: 10, posicao: "GOL"}) // Exemplo de mock
-          )}>
-            Sortear Jogador
+      {/* TELA 1: SELEÇÃO DE LIGA */}
+      {faseJogo === 'SELECAO_LIGA' && (
+        <div className="home-hero">
+          <span className="home-tag">Temporada Ativa</span>
+          <h1 className="home-title">Escolha a sua<br/>Liga Clássica</h1>
+          <p className="home-sub">Monte seu esquadrão lendário dos anos 90 e 2000.</p>
+          
+          <button 
+            className="btn-primary btn-liga-italia" 
+            onClick={() => selecionarLiga('ITÁLIA')}
+          >
+            SÉRIE A (ITÁLIA)
+          </button>
+
+          <button 
+            className="btn-primary btn-liga-espanha" 
+            onClick={() => selecionarLiga('ESPANHA')}
+          >
+            LA LIGA (ESPANHA)
           </button>
         </div>
       )}
 
+      {/* TELA 2: ENGINE DE DRAFT */}
+      {faseJogo === 'DRAFT' && (
+        <div className="home-hero">
+          <span className="home-tag">Liga: {ligaSelecionada}</span>
+          <h1 className="home-title">Draft de Elenco</h1>
+          
+          <div className="draft-stage">
+            <div className="draft-info">
+              Próxima Posição: <span>{posicoesOrdem[posicaoAtualIndex]}</span>
+            </div>
+            <div className="draft-info">
+              Orçamento: <span>{orcamento}M</span>
+            </div>
+            
+            <button 
+              className="btn-primary"
+              onClick={() => executarSorteioDraft(
+                orcamento, 
+                listaJogadoresGlobal, 
+                (j) => console.log("Sorteando:", j.name), 
+                () => processarEscolhaJogador({name: "Jogador X", cost: 10, posicao: posicoesOrdem[posicaoAtualIndex]}) // Exemplo de Mock do motor
+              )}
+            >
+              Sortear Jogador
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TELA 3: MENU PRINCIPAL */}
       {faseJogo === 'MENU_PRINCIPAL' && (
-        <div className="menu-principal">
-          <h1>Time Montado!</h1>
-          <p>Prepare-se para a Copa.</p>
+        <div className="home-hero">
+          <span className="home-tag">Draft Concluído</span>
+          <h1 className="home-title">Time Montado!</h1>
+          <p className="home-sub">Prepare-se para disputar a Copa Oficial.</p>
+          
+          <button className="btn-primary" onClick={() => setFaseJogo('SELECAO_LIGA')}>
+            Jogar Novamente
+          </button>
         </div>
       )}
     </div>
   );
 }
-{faseJogo === 'SELECAO_LIGA' && (
-  <div className="retro-menu">
-    <h1>NOSTALGIA FC</h1>
-    
-    <button 
-      className="btn-italia" 
-      onClick={() => selecionarLiga('ITÁLIA')}
-    >
-      SÉRIE A (ITÁLIA)
-    </button>
-
-    <button 
-      className="btn-espanha" 
-      onClick={() => selecionarLiga('ESPANHA')}
-    >
-      LA LIGA (ESPANHA)
-    </button>
-  </div>
-)}
-{faseJogo === 'SELECAO_LIGA' && (
-  <div className="retro-menu">
-    <h1>NOSTALGIA FC</h1>
-    
-    <button 
-      className="btn-italia" 
-      onClick={() => selecionarLiga('ITÁLIA')}
-    >
-      SÉRIE A (ITÁLIA)
-    </button>
-
-    <button 
-      className="btn-espanha" 
-      onClick={() => selecionarLiga('ESPANHA')}
-    >
-      LA LIGA (ESPANHA)
-    </button>
-  </div>
-)}
 
 export default App;
