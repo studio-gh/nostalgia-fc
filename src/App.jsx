@@ -225,17 +225,23 @@ function App() {
         </div>
       )}
 
-      {/* MODAL DE ESCOLHA DE JOGADORES */}
-      {modalAberto && (
-        <div className="draft-options-overlay">
-          <div className="draft-modal">
-            <button className="btn-close-modal" onClick={() => setModalAberto(false)}>X</button>
-            <h3>Sorteio: {slotAlvo?.posicao}</h3>
-            <p style={{fontSize: '13px', color: 'var(--nfc-muted)'}}>Contrate um atleta para esta vaga:</p>
-            
-            {opcoesSorteadas.map((jogador) => (
-              <div key={jogador.id} className="option-card" onClick={() => escolherJogador(jogador)}>
-                <div>
-                  <strong style={{color: '#fff'}}>{jogador.name}</strong>
-                  <div style={{fontSize: '12px', color: 'var(--nfc-muted)'}}>Rating: {jogador.rating}</div>
-                </div>
+     {/* MODAL DE ESCOLHA DE JOGADORES - CORRIGIDO */}
+{modalAberto && (
+  <div className="draft-options-overlay">
+    <div className="draft-modal">
+      <button className="btn-close-modal" onClick={() => setModalAberto(false)}>X</button>
+      <h3>Sorteio: {slotAlvo?.posicao}</h3>
+      <p style={{fontSize: '13px', color: '#888'}}>Contrate um atleta para esta vaga:</p>
+      
+      {opcoesSorteadas.map((jogador) => (
+        <div key={jogador.id} className="option-card" onClick={() => escolherJogador(jogador)}>
+          <div>
+            <strong style={{color: '#fff'}}>{jogador.name}</strong>
+            <div style={{fontSize: '12px', color: '#888'}}>Rating: {jogador.rating}</div>
+          </div>
+          <span style={{fontWeight: 'bold', color: '#F99A16'}}>{jogador.cost}M</span>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
