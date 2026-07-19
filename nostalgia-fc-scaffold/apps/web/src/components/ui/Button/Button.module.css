@@ -1,0 +1,17 @@
+.nf-button {
+  width: 100%;
+  padding: 18px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  background: #c9a14a;
+  color: #09090b;
+  font-size: 18px;
+  font-weight: 700;
+  transition: 0.25s;
+}
+
+.nf-button:hover {
+  background: #d7b15a;
+  transform: translateY(-2px);
+}

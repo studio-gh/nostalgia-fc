@@ -1,0 +1,7 @@
+{
+  "name": "@nostalgiafc/engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "draft/DraftEngine.ts"
+}

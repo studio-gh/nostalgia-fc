@@ -1,0 +1,14 @@
+/* STUB: not specified in Notion doc. Adjust to match NDS design system. */
+.nf-panel {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 18px;
+  padding: 20px;
+}
+
+.nf-panel h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #c9a14a;
+}
